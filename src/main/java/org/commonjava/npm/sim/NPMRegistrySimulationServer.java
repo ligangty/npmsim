@@ -23,25 +23,19 @@ import io.undertow.servlet.api.ServletInfo;
 import io.undertow.servlet.util.ImmediateInstanceFactory;
 import org.apache.commons.io.IOUtils;
 import org.commonjava.test.http.common.CommonMethod;
-import org.commonjava.test.http.expect.ContentResponse;
-import org.commonjava.test.http.expect.ExpectationServer;
 import org.commonjava.test.http.expect.ExpectationServlet;
+import org.commonjava.test.http.util.UrlUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.servlet.Servlet;
 import javax.servlet.ServletException;
-import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.MalformedURLException;
-import java.net.URI;
-import java.net.URISyntaxException;
-import java.net.URL;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.Arrays;
 
 /**
  * Created by gli on 2/17/17.
@@ -52,7 +46,7 @@ public class NPMRegistrySimulationServer
 
     private Undertow server;
 
-    private final HttpServlet servlet;
+    private final NPMRegistrySimulationServlet servlet;
 
     private int port;
 
@@ -101,9 +95,26 @@ public class NPMRegistrySimulationServer
         return this;
     }
 
+    public String formatUrl( final String... subpath )
+    {
+        try
+        {
+            return UrlUtils.buildUrl( "http://127.0.0.1:" + port, servlet.getBaseResource(), subpath );
+        }
+        catch ( final MalformedURLException e )
+        {
+            throw new IllegalArgumentException( "Failed to build url to: " + Arrays.toString( subpath ), e );
+        }
+    }
+
     public int getPort()
     {
         return port;
+    }
+
+    public void addServiceHandler( final CommonMethod method, final String path, final ServiceHandler handler )
+    {
+        this.servlet.addHandler( method, path, handler );
     }
 
     public static void main( String[] args )
@@ -131,7 +142,7 @@ public class NPMRegistrySimulationServer
             System.out.println( "Error port setting for port:" + port + "!" );
             System.exit( 0 );
         }
-        NPMRegistrySimulationServer server = new NPMRegistrySimulationServer( port );
+        final NPMRegistrySimulationServer server = new NPMRegistrySimulationServer( port );
 
         server.start();
         System.out.println( "http server hosted at port:" + server.getPort() );
@@ -140,154 +151,36 @@ public class NPMRegistrySimulationServer
         final String jqueryJsonMeta = ResourceReader.getJson( "jquery.json" )
                                                     .replaceAll( "https://registry.npmjs.org",
                                                                  "http://localhost:" + server.getPort() );
-        server.expect( jqueryMetaReqPath, 200, jqueryJsonMeta );
+        server.addServiceHandler( CommonMethod.GET, jqueryMetaReqPath, new ServiceHandler()
+        {
+            @Override
+            public void handle( HttpServletRequest req, HttpServletResponse resp )
+                    throws ServletException, IOException
+            {
+                resp.setStatus( 200 );
+
+                server.logger.info( "Set status: {} with body string", 200 );
+                resp.getWriter()
+                    .write( jqueryJsonMeta );
+            }
+        } );
 
         final String jqueryPkgReqPath = server.formatUrl( "jquery", "-", "jquery-1.12.4.tgz" );
-        final InputStream jqueryPkgStream = ResourceReader.getPkg( "jquery-1.12.4.tgz" );
-        server.expect( jqueryPkgReqPath, 200, jqueryPkgStream );
+        server.addServiceHandler( CommonMethod.GET, jqueryPkgReqPath, new ServiceHandler()
+        {
+            @Override
+            public void handle( HttpServletRequest req, HttpServletResponse resp )
+                    throws ServletException, IOException
+            {
+                resp.setStatus( 200 );
+
+                server.logger.info( "Set status: {} with body InputStream", 200 );
+                InputStream body = ResourceReader.getPkg( "jquery-1.12.4.tgz" );
+                IOUtils.copy( body, resp.getOutputStream() );
+                body.close();
+            }
+        } );
 
     }
 
-    public static class NPMRegistrySimulationServlet
-            extends HttpServlet
-    {
-        private final Logger logger = LoggerFactory.getLogger( getClass() );
-
-        private static final long serialVersionUID = 1L;
-
-        private final String baseResource;
-
-        private final Map<String, Integer> accessesByPath = new HashMap<>();
-
-        public NPMRegistrySimulationServlet( final String baseResource )
-        {
-            String br = baseResource;
-            if ( br == null )
-            {
-                br = "/";
-            }
-            else if ( !br.startsWith( "/" ) )
-            {
-                br = "/" + br;
-            }
-            this.baseResource = br;
-        }
-
-        public Map<String, Integer> getAccessesByPath()
-        {
-            return accessesByPath;
-        }
-
-        public String getBaseResource()
-        {
-            return baseResource;
-        }
-
-        public String getAccessKey( final String method, final String path )
-        {
-            return method.toUpperCase() + " " + path;
-        }
-
-        private String getPath( final String path )
-        {
-            String realPath = path;
-            try
-            {
-                final URL u = new URL( path );
-                realPath = u.getPath();
-            }
-            catch ( final MalformedURLException e )
-            {
-            }
-
-            return realPath;
-        }
-
-        @Override
-        protected void service( final HttpServletRequest req, final HttpServletResponse resp )
-                throws ServletException, IOException
-        {
-            String wholePath;
-            try
-            {
-                wholePath = new URI( req.getRequestURI() ).getPath();
-            }
-            catch ( final URISyntaxException e )
-            {
-                throw new ServletException( "Cannot parse request URI", e );
-            }
-
-            String path = wholePath;
-            if ( path.length() > 1 )
-            {
-                path = path.substring( 1 );
-            }
-
-            final String key = getAccessKey( req.getMethod(), wholePath );
-
-            logger.info( "Looking up expectation for: {}", key );
-
-            final Integer i = accessesByPath.get( key );
-            if ( i == null )
-            {
-                accessesByPath.put( key, 1 );
-            }
-            else
-            {
-                accessesByPath.put( key, i + 1 );
-            }
-
-            logger.info( "Looking for expectation: '{}'", key );
-            final ContentResponse expectation = expectations.get( key );
-            if ( expectation != null )
-            {
-                logger.info( "Responding via registered expectation: {}", expectation );
-
-                if ( expectation.handler() != null )
-                {
-                    expectation.handler().handle( req, resp );
-                    logger.info( "Using handler..." );
-                    return;
-                }
-                else if ( expectation.body() != null )
-                {
-                    resp.setStatus( expectation.code() );
-
-                    logger.info( "Set status: {} with body string", expectation.code() );
-                    resp.getWriter().write( expectation.body() );
-                }
-                else if ( expectation.bodyStream() != null )
-                {
-                    resp.setStatus( expectation.code() );
-
-                    logger.info( "Set status: {} with body InputStream", expectation.code() );
-                    IOUtils.copy( expectation.bodyStream(), resp.getOutputStream() );
-                }
-                else
-                {
-                    resp.setStatus( expectation.code() );
-                    logger.info( "Set status: {} with no body", expectation.code() );
-                }
-
-                return;
-            }
-
-            resp.setStatus( 404 );
-        }
-
-        public String getAccessKey( final CommonMethod method, final String path )
-        {
-            return getAccessKey( method.name(), path );
-        }
-
-        public Integer getAccessesFor( final String path )
-        {
-            return accessesByPath.get( getAccessKey( CommonMethod.GET, path ) );
-        }
-
-        public Integer getAccessesFor( final String method, final String path )
-        {
-            return accessesByPath.get( getAccessKey( method, path ) );
-        }
-    }
 }

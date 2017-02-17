@@ -16,23 +16,26 @@
 package org.commonjava.npm.sim;
 
 import org.apache.commons.io.IOUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.InputStream;
-
 
 /**
  * Created by gli on 2/17/17.
  */
 public class ResourceReader
 {
+    private static final Logger logger = LoggerFactory.getLogger( ResourceReader.class );
+
     public static String getJson( String resource )
     {
         try (InputStream stream = Thread.currentThread().getContextClassLoader().getResourceAsStream( resource ))
         {
             if ( stream == null )
             {
-                System.out.println( "Cannot find classpath resource: " + resource );
+                logger.error( "Cannot find classpath resource: {}", resource );
                 return "";
             }
 
@@ -40,7 +43,7 @@ public class ResourceReader
         }
         catch ( IOException e )
         {
-            System.out.println( "Cannot read resource: " + resource );
+            logger.error( "Cannot read resource: {}", resource );
             e.printStackTrace();
             return "";
         }
@@ -51,7 +54,7 @@ public class ResourceReader
         InputStream stream = Thread.currentThread().getContextClassLoader().getResourceAsStream( resource );
         if ( stream == null )
         {
-            System.out.println( "Cannot find classpath resource pkg: " + resource );
+            logger.error( "Cannot find classpath resource pkg: {} ", resource );
             return null;
         }
 
