@@ -11,7 +11,8 @@ fi
 
 echo "starting simulation server, see $PROJECT_PATH/bin/mvn.out for details"
 nohup mvn -f $PROJECT_PATH/pom.xml clean install exec:exec -DstartPort=$PORT > $PROJECT_PATH/bin/mvn.out 2>&1 &
-sleep 5s
+echo "waiting 10s for simulation server to startup"
+sleep 10s
 echo "simulation server started"
 
 echo "create test npmsniff project"
