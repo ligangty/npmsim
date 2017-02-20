@@ -1,18 +1,3 @@
-/**
- * Copyright (C) 2013 Red Hat, Inc. (jdcasey@commonjava.org)
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *         http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 package org.commonjava.npm.sim;
 
 import io.undertow.Undertow;
@@ -22,29 +7,21 @@ import io.undertow.servlet.api.DeploymentManager;
 import io.undertow.servlet.api.ServletInfo;
 import io.undertow.servlet.util.ImmediateInstanceFactory;
 import org.apache.commons.io.IOUtils;
-import org.commonjava.test.http.common.CommonMethod;
-import org.commonjava.test.http.expect.ExpectationServlet;
-import org.commonjava.test.http.util.UrlUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.servlet.Servlet;
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.MalformedURLException;
 import java.util.Arrays;
+import java.util.Enumeration;
 
-/**
- * Created by gli on 2/17/17.
- */
 public class NPMRegistrySimulationServer
 {
     private final Logger logger = LoggerFactory.getLogger( getClass() );
-
-    private Undertow server;
 
     private final NPMRegistrySimulationServlet servlet;
 
@@ -56,16 +33,10 @@ public class NPMRegistrySimulationServer
         this.servlet = new NPMRegistrySimulationServlet( null );
     }
 
-    public NPMRegistrySimulationServer( final int port, final String baseResource )
-    {
-        this.port = port;
-        this.servlet = new NPMRegistrySimulationServlet( baseResource );
-    }
-
     public NPMRegistrySimulationServer start()
             throws IOException
     {
-        final ServletInfo si = Servlets.servlet( "TEST", ExpectationServlet.class )
+        final ServletInfo si = Servlets.servlet( "TEST", NPMRegistrySimulationServlet.class )
                                        .addMapping( "*" )
                                        .addMapping( "/*" )
                                        .setLoadOnStartup( 1 );
@@ -80,6 +51,7 @@ public class NPMRegistrySimulationServer
         final DeploymentManager dm = Servlets.defaultContainer().addDeployment( di );
         dm.deploy();
 
+        final Undertow server;
         try
         {
             server = Undertow.builder().setHandler( dm.start() ).addHttpListener( port, "127.0.0.1" ).build();
@@ -120,10 +92,11 @@ public class NPMRegistrySimulationServer
     public static void main( String[] args )
             throws Exception
     {
-        int port = 10240;
+        int port = 8000;
         for ( int i = 0; i < args.length; i++ )
         {
             String param = args[i];
+            System.out.println( "arg[" + i + "]: " + param );
             if ( "--port".equals( param.trim() ) || "-p".equals( param.trim() ) )
             {
                 try
@@ -151,36 +124,53 @@ public class NPMRegistrySimulationServer
         final String jqueryJsonMeta = ResourceReader.getJson( "jquery.json" )
                                                     .replaceAll( "https://registry.npmjs.org",
                                                                  "http://localhost:" + server.getPort() );
-        server.addServiceHandler( CommonMethod.GET, jqueryMetaReqPath, new ServiceHandler()
-        {
-            @Override
-            public void handle( HttpServletRequest req, HttpServletResponse resp )
-                    throws ServletException, IOException
-            {
-                resp.setStatus( 200 );
-
-                server.logger.info( "Set status: {} with body string", 200 );
-                resp.getWriter()
-                    .write( jqueryJsonMeta );
-            }
+        server.addServiceHandler( CommonMethod.GET, jqueryMetaReqPath, ( req, resp ) -> {
+            printHeaders( req );
+            resp.setStatus( 200 );
+            server.logger.info( "Set status: {} with body string", 200 );
+            resp.getWriter().write( jqueryJsonMeta );
         } );
 
         final String jqueryPkgReqPath = server.formatUrl( "jquery", "-", "jquery-1.12.4.tgz" );
-        server.addServiceHandler( CommonMethod.GET, jqueryPkgReqPath, new ServiceHandler()
-        {
-            @Override
-            public void handle( HttpServletRequest req, HttpServletResponse resp )
-                    throws ServletException, IOException
+        server.addServiceHandler( CommonMethod.GET, jqueryPkgReqPath, ( req, resp ) -> {
+            printHeaders( req );
+            resp.setStatus( 200 );
+            server.logger.info( "Set status: {} with body InputStream", 200 );
+            InputStream body = ResourceReader.getPkg( "jquery-1.12.4.tgz" );
+            if ( body != null )
             {
-                resp.setStatus( 200 );
-
-                server.logger.info( "Set status: {} with body InputStream", 200 );
-                InputStream body = ResourceReader.getPkg( "jquery-1.12.4.tgz" );
                 IOUtils.copy( body, resp.getOutputStream() );
                 body.close();
             }
         } );
 
+        final String npmSnifMetaReqPath = server.formatUrl( "npmsniff" );
+        server.addServiceHandler( CommonMethod.PUT, npmSnifMetaReqPath, ( req, resp ) -> {
+            printHeaders( req );
+            System.out.println( "request body: \n" + IOUtils.toString( req.getInputStream() ) );
+            resp.setStatus( 200 );
+            server.logger.info( "Set status: {} with body string", 200 );
+            resp.getWriter().write( "{\"success\": true}" );
+        } );
+
+    }
+
+    private static void printHeaders( HttpServletRequest req )
+    {
+        Enumeration<String> headers = req.getHeaderNames();
+        if ( headers.hasMoreElements() )
+        {
+            System.out.println( "The header for request as following:" );
+        }
+        while ( headers.hasMoreElements() )
+        {
+            String header = headers.nextElement();
+            Enumeration<String> headerVals = req.getHeaders( header );
+            while ( headerVals.hasMoreElements() )
+            {
+                System.out.println( header + ":    " + headerVals.nextElement() );
+            }
+        }
     }
 
 }

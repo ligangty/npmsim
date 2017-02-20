@@ -1,8 +1,5 @@
 package org.commonjava.npm.sim;
 
-import org.apache.commons.io.IOUtils;
-import org.commonjava.test.http.common.CommonMethod;
-import org.commonjava.test.http.expect.ContentResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -18,9 +15,6 @@ import java.net.URL;
 import java.util.HashMap;
 import java.util.Map;
 
-/**
- * Created by gli on 17-2-17.
- */
 public class NPMRegistrySimulationServlet
         extends HttpServlet
 {
@@ -34,6 +28,10 @@ public class NPMRegistrySimulationServlet
 
     private final Map<String, Integer> accessesByPath = new HashMap<>();
 
+    NPMRegistrySimulationServlet(){
+        this("/");
+    }
+
     public NPMRegistrySimulationServlet( final String baseResource )
     {
         String br = baseResource;
@@ -46,11 +44,6 @@ public class NPMRegistrySimulationServlet
             br = "/" + br;
         }
         this.baseResource = br;
-    }
-
-    public Map<String, Integer> getAccessesByPath()
-    {
-        return accessesByPath;
     }
 
     public String getBaseResource()
@@ -123,16 +116,6 @@ public class NPMRegistrySimulationServlet
     public String getAccessKey( final CommonMethod method, final String path )
     {
         return getAccessKey( method.name(), path );
-    }
-
-    public Integer getAccessesFor( final String path )
-    {
-        return accessesByPath.get( getAccessKey( CommonMethod.GET, path ) );
-    }
-
-    public Integer getAccessesFor( final String method, final String path )
-    {
-        return accessesByPath.get( getAccessKey( method, path ) );
     }
 
     public void addHandler( final CommonMethod method, final String path, final ServiceHandler handler )
