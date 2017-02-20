@@ -96,7 +96,6 @@ public class NPMRegistrySimulationServer
         for ( int i = 0; i < args.length; i++ )
         {
             String param = args[i];
-            System.out.println( "arg[" + i + "]: " + param );
             if ( "--port".equals( param.trim() ) || "-p".equals( param.trim() ) )
             {
                 try
