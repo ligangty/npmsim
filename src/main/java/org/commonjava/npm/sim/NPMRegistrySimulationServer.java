@@ -119,6 +119,7 @@ public class NPMRegistrySimulationServer
         server.start();
         System.out.println( "http server hosted at port:" + server.getPort() );
 
+        // serve for GET:/jquery
         final String jqueryMetaReqPath = server.formatUrl( "jquery" );
         final String jqueryJsonMeta = ResourceReader.getJson( "jquery.json" )
                                                     .replaceAll( "https://registry.npmjs.org",
@@ -130,6 +131,7 @@ public class NPMRegistrySimulationServer
             resp.getWriter().write( jqueryJsonMeta );
         } );
 
+        // serve for GET:/jquery/-/jquery-1.12.4.tgz
         final String jqueryPkgReqPath = server.formatUrl( "jquery", "-", "jquery-1.12.4.tgz" );
         server.addServiceHandler( CommonMethod.GET, jqueryPkgReqPath, ( req, resp ) -> {
             printHeaders( req );
@@ -143,6 +145,7 @@ public class NPMRegistrySimulationServer
             }
         } );
 
+        // serve for PUT:/npmsniff
         final String npmSnifMetaReqPath = server.formatUrl( "npmsniff" );
         server.addServiceHandler( CommonMethod.PUT, npmSnifMetaReqPath, ( req, resp ) -> {
             printHeaders( req );
@@ -150,6 +153,32 @@ public class NPMRegistrySimulationServer
             resp.setStatus( 200 );
             server.logger.info( "Set status: {} with body string", 200 );
             resp.getWriter().write( "{\"success\": true}" );
+        } );
+
+        final String fakeToken = "8d0afba2-0819-56fa-9834-2311c895faaf";
+        // serve for PUT:/-/user/org.couchdb.user:npm
+        final String loginReqPath = server.formatUrl( "-", "user", "org.couchdb.user:npm" );
+        server.addServiceHandler( CommonMethod.PUT, loginReqPath, ( req, resp ) -> {
+            printHeaders( req );
+            System.out.println( "request body: \n" + IOUtils.toString( req.getInputStream() ) );
+            resp.setStatus( 201 );
+            server.logger.info( "Set status: {} with body string", 201 );
+            resp.getWriter()
+                .write( "{\"id\":\"org.couchdb.user:undefined\","
+                                + "\"ok\": true,"
+                                + "\"rev\":\"_we_dont_use_revs_any_more\","
+                                + "\"token\": \""+fakeToken+"\"}" );
+        } );
+
+        // serve for DELETE:/-/user/token/$token
+        final String logoutReqPath = server.formatUrl( "-", "user", "token", fakeToken );
+        server.addServiceHandler( CommonMethod.DELETE, logoutReqPath, ( req, resp ) -> {
+            printHeaders( req );
+            System.out.println( "request body: \n" + IOUtils.toString( req.getInputStream() ) );
+            resp.setStatus( 200 );
+            server.logger.info( "Set status: {} with body string", 200 );
+            resp.getWriter()
+                .write( "{\"ok\":true}" );
         } );
 
     }
